@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+
+# Blurb / BookWright files (often large/binary)
+*.blurb
+*.csv
+
+# Generated map output
+*_map.html
