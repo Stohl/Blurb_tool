@@ -51,7 +51,7 @@ BIRTH_DATE = date(2025, 6, 1)
 # To add a new language: copy one of the existing blocks, give it a new 2-letter
 # code (e.g. "DE", "FR", "NO"), translate the strings, and set LANGUAGE to that code.
 LANGUAGE = "EN"  # "EN" = English, "SV" = Svenska, 
-ABBREVIATE_TEXT = False  # True = abbreviate weekday/month/age text
+SHORT_TEXT = False  # True = abbreviate weekday/month/age text
 
 _LANGUAGES: dict[str, dict] = {
     "EN": {
@@ -100,8 +100,8 @@ _LANGUAGES: dict[str, dict] = {
         # Special age labels
         "birthday":       "födelsedagen",
         "remaining":      "kvar",
-        # Abbreviation replacements applied by _kondensera()
-        # Each entry is (full_word, abbreviated_form)
+        # Short replacements applied by _shorty()
+        # Each entry is (full_word, short_form)
         "abbr": [
             ("veckor",   "v"),
             ("vecka",    "v"),
@@ -211,9 +211,9 @@ _WMO_SYMBOLS = {
 }
 
 
-def _kondensera(s: str) -> str:
-    """Abbreviates weekday/month/age words when ABBREVIATE_TEXT is True."""
-    if not ABBREVIATE_TEXT or not s:
+def _shorty(s: str) -> str:
+    """Abbreviates weekday/month/age words when SHORT_TEXT is True."""
+    if not SHORT_TEXT or not s:
         return s
     result = s
     # Weekdays
@@ -240,8 +240,8 @@ def format_date_long(dt_str: str) -> tuple[str, str]:
             y, m, d = int(dparts[0]), int(dparts[1]), int(dparts[2])
             if 1 <= m <= 12:
                 dt = datetime(y, m, d)
-                weekdays = _SV_WEEKDAYS_KORT if ABBREVIATE_TEXT else _SV_WEEKDAYS
-                months = _SV_MONTHS_KORT if ABBREVIATE_TEXT else _SV_MONTHS
+                weekdays = _SV_WEEKDAYS_KORT if SHORT_TEXT else _SV_WEEKDAYS
+                months = _SV_MONTHS_KORT if SHORT_TEXT else _SV_MONTHS
                 weekday = weekdays[dt.weekday()]
                 month = months[m - 1]
                 return (f"{weekday} {d} {month} {y}", time_part)
@@ -1216,7 +1216,7 @@ def run(source_blurb: Path) -> tuple[int, Optional[Path]]:
 
         used_text_ranges.add((start, end))
         datum_long, klockslag = format_date_long(exif.datetime_str)
-        ålder = _kondensera(format_age(exif.datetime_str))
+        ålder = _shorty(format_age(exif.datetime_str))
 
         caption_html = build_caption_html(
             plats if ENABLE_GPS else "",
