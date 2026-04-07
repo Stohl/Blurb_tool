@@ -39,12 +39,12 @@ from typing import Optional
 from PIL import Image
 
 # ── User toggles (set True/False here) ───────────────────────────────────────
-RESIZE_LAYOUT = True    # True = run internal resize of text/image containers in bbf2.xml
+RESIZE_LAYOUT = False    # True = run internal resize of text/image containers in bbf2.xml
 ENABLE_GPS = True       # If False: no place name in captions; lat/lon still in CSV / used for weather when on
 ENABLE_WEATHER = True   # If False: do not fetch/write weather
 
 # Reference date for age / days until birthday in captions (see format_age). None = disable.
-BIRTH_DATE = date(2025, 6, 1)
+BIRTH_DATE = date(2023, 5, 14)
 
 # ── Language  ─────────────────────────────────────────────────────────
 # Set LANGUAGE to one of the codes defined in _LANGUAGES below.

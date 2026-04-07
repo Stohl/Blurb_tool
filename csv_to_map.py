@@ -6,11 +6,18 @@ CSV columns: filename, page, city, weather, lat, lon [, optional extra ...]
 
 Usage:
   python3 csv_to_map.py album.csv
+  python3 csv_to_map.py album.csv --maptiler-key YOUR_KEY
 
 Writes <stem>_map.html next to the CSV and opens it in the default browser.
 
 The HTML includes a Map style dropdown in the top-left; initial style follows
 DEFAULT_STYLE in this file.
+
+Free styles (OpenFreeMap — no key needed):
+  liberty, bright, positron
+
+MapTiler styles (require --maptiler-key):
+  streets, outdoor, satellite, basic, winter, toner, aquarelle, custom
 """
 
 from __future__ import annotations
@@ -21,35 +28,50 @@ import json
 import webbrowser
 from html import escape
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-# MapTiler (https://cloud.maptiler.com/) — set your own key for tiles to load in the browser.
-# The script always runs and writes HTML; MapTiler maps will not load without a valid key.
-MAPTILER_KEY = "API-Key"
+# Default style — used when no --maptiler-key is given.
+# Pick one of the free OpenFreeMap styles: "liberty", "bright", "positron"
+DEFAULT_STYLE = "liberty"
 
-
-def _style_url(map_id: str) -> str:
-    return f"https://api.maptiler.com/maps/{map_id}/style.json?key={MAPTILER_KEY}"
-
-
-# Preset style ids: https://docs.maptiler.com/cloud/api/maps/
-MAP_STYLES = {
-    "streets": _style_url("streets-v2"),
-    "outdoor": _style_url("outdoor-v2"),
-    "satellite": _style_url("satellite"),
-    "basic": _style_url("basic-v2"),
-    "winter": _style_url("winter-v2"),
-    "toner": _style_url("toner-v2"),
-    "aquarelle": _style_url("aquarelle-v4"),
-    "custom": f"https://api.maptiler.com/maps/0123/style.json?key={MAPTILER_KEY}",
-}
-
-DEFAULT_STYLE = "streets"
+# MapTiler custom map ID — replace 0123 with your own map ID from MapTiler Cloud.
+MAPTILER_CUSTOM_MAP_ID = "0123"
 
 # Pin: line from dot to page label (px). Set 0 to hide.
 PIN_LINE_WIDTH = 22
 # Cluster bubble: target max characters per line (breaks after comma between page numbers when possible).
 CLUSTER_CHARS_PER_LINE = 22
+
+# Free styles — no API key required (https://openfreemap.org/)
+FREE_STYLES: Dict[str, str] = {
+    "liberty":  "https://tiles.openfreemap.org/styles/liberty",
+    "bright":   "https://tiles.openfreemap.org/styles/bright",
+    "positron": "https://tiles.openfreemap.org/styles/positron",
+}
+
+# MapTiler style IDs — resolved to URLs only when a key is supplied.
+# See https://docs.maptiler.com/cloud/api/maps/ for all available IDs.
+MAPTILER_STYLE_IDS: Dict[str, str] = {
+    "streets":   "streets-v2",
+    "outdoor":   "outdoor-v2",
+    "satellite": "satellite",
+    "basic":     "basic-v2",
+    "winter":    "winter-v2",
+    "toner":     "toner-v2",
+    "aquarelle": "aquarelle-v4",
+    "custom":    MAPTILER_CUSTOM_MAP_ID,
+}
+
+
+def _build_map_styles(maptiler_key: Optional[str]) -> Dict[str, str]:
+    """Merge free styles with MapTiler styles (only if a key was provided)."""
+    styles = dict(FREE_STYLES)
+    if maptiler_key:
+        for name, map_id in MAPTILER_STYLE_IDS.items():
+            styles[name] = (
+                f"https://api.maptiler.com/maps/{map_id}/style.json?key={maptiler_key}"
+            )
+    return styles
 
 
 def _parse_csv(csv_path: Path) -> List[dict[str, Any]]:
@@ -88,12 +110,20 @@ def create_map_html(
     rows: List[dict[str, Any]],
     output_path: Path,
     initial_style_key: str,
+    maptiler_key: Optional[str],
 ) -> None:
     """Write one HTML file: MapLibre map + clustered markers."""
     with_coords = [r for r in rows if r["lat"] is not None and r["lon"] is not None]
     if not with_coords:
         print("No rows with valid latitude/longitude. Nothing to map.")
         return
+
+    map_styles = _build_map_styles(maptiler_key)
+
+    # Fall back to first available style if the requested one isn't in the dict.
+    if initial_style_key not in map_styles:
+        initial_style_key = next(iter(map_styles))
+        print(f"Requested style not available; falling back to '{initial_style_key}'.")
 
     avg_lat = sum(r["lat"] for r in with_coords) / len(with_coords)
     avg_lon = sum(r["lon"] for r in with_coords) / len(with_coords)
@@ -124,11 +154,11 @@ def create_map_html(
     geojson_str = json.dumps({"type": "FeatureCollection", "features": features})
     line_display = "none" if PIN_LINE_WIDTH == 0 else "block"
     label_left = 6 + PIN_LINE_WIDTH
-    style_url = MAP_STYLES[initial_style_key]
-    map_styles_json = json.dumps(MAP_STYLES)
+    style_url = map_styles[initial_style_key]
+    map_styles_json = json.dumps(map_styles)
     style_options_html = "".join(
         f'<option value="{escape(k)}"{" selected" if k == initial_style_key else ""}>{escape(k.title())}</option>'
-        for k in MAP_STYLES
+        for k in map_styles
     )
 
     html = f"""<!DOCTYPE html>
@@ -284,7 +314,26 @@ def main() -> None:
         description="Build an HTML map from a book CSV (filename, page, city, weather, lat, lon)."
     )
     parser.add_argument("csv_file", type=str, help="Path to CSV file")
+    parser.add_argument(
+        "--maptiler-key",
+        type=str,
+        default=None,
+        metavar="KEY",
+        help=(
+            "MapTiler API key (https://cloud.maptiler.com/). "
+            "Required to use MapTiler styles (streets, outdoor, satellite, etc.). "
+            "Without this, only free OpenFreeMap styles are available."
+        ),
+    )
     args = parser.parse_args()
+
+    if not args.maptiler_key:
+        print(
+            "No --maptiler-key supplied. Using free OpenFreeMap styles only.\n"
+            "To enable MapTiler styles, run:\n"
+            "  python3 csv_to_map.py album.csv --maptiler-key YOUR_KEY"
+        )
+
     csv_path = Path(args.csv_file).expanduser().resolve()
     if not csv_path.is_file():
         print(f"File not found: {csv_path}")
@@ -294,7 +343,7 @@ def main() -> None:
     print(f"Read {len(rows)} row(s) from {csv_path.name}")
 
     out = csv_path.parent / (csv_path.stem + "_map.html")
-    create_map_html(rows, out, DEFAULT_STYLE)
+    create_map_html(rows, out, DEFAULT_STYLE, args.maptiler_key)
 
 
 if __name__ == "__main__":
