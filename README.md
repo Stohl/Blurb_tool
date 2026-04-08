@@ -45,7 +45,27 @@ pip install -r requirements.txt
 
 ---
 
+## Setting up your book in BookWright
+
+**1. Create a Standard Landscape book**
+
+![Choose Standard Landscape in BookWright](docs/1.jpeg)
+
+**2. Apply this layout to your pages**
+
+![Page layout with 4 photos and 4 text boxes](docs/2.jpeg)
+
+**3. Auto-place all your photos — it should look like this**
+
+![Auto-placed photos](docs/3.jpeg)
+
+---
+
 ## Running it
+
+**4. Set your preferences near the top of the script**
+
+![Script settings](docs/4.jpeg)
 
 ```bash
 python3 blurb_captions.py path/to/book.blurb
@@ -55,6 +75,14 @@ python3 csv_to_map.py path/to/album.csv
 The first time you run `blurb_captions.py` it needs to look up place names and weather online, so it can be slow for large books (roughly 1–2 seconds per photo). After that it caches everything in a CSV file next to your book (`album.csv` for `album.blurb`), so subsequent runs are much faster.
 
 Running `python3 blurb_captions.py album.blurb` overwrites **`album-new.blurb`** on each run and updates **`album.csv`** (the original `.blurb` is left unchanged).
+
+**5. Open `album-new.blurb` in BookWright — captions are filled in**
+
+![Result with captions](docs/5.jpeg)
+
+**6. Run `csv_to_map.py` to get an interactive map of where each photo was taken, with page numbers as markers**
+
+![Map example](docs/6.jpeg)
 
 ### Map with MapTiler styles
 
@@ -95,6 +123,13 @@ Near the top of `csv_to_map.py`:
 ## The CSV
 
 After the first run, a CSV file appears next to your book (same base name as the input `.blurb`, e.g. `album.csv` for `album.blurb`). You can edit it to fix place names or add locations for photos without GPS. The script will never overwrite values you've entered yourself.
+
+---
+
+## Known issues
+
+- **Photo frame fill/fit** — after opening `album-new.blurb`, you'll need to manually adjust each photo's fill or fit setting in BookWright. The script doesn't touch this.
+- **Thumbnails don't update** — page thumbnails in BookWright won't refresh until you make a change on each page.
 
 ---
 
