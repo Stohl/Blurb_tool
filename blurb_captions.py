@@ -39,7 +39,7 @@ from typing import Optional
 from PIL import Image
 
 # ── User toggles (set True/False here) ───────────────────────────────────────
-RESIZE_LAYOUT = False    # True = run internal resize of text/image containers in bbf2.xml
+RESIZE_LAYOUT = True    # True = run internal resize of text/image containers in bbf2.xml
 ENABLE_GPS = True       # If False: no place name in captions; lat/lon still in CSV / used for weather when on
 ENABLE_WEATHER = True   # If False: do not fetch/write weather
 
@@ -675,17 +675,156 @@ def _resize_process_page(page_elem, page_width):
         texts[1].set("height", str(h_text2))
 
 
-def _apply_resize_layout(content: str) -> tuple[str, int]:
-    root = ET.fromstring(content)
-    page_width = float(root.get("width", "693") or 693.0)
-    pages_processed = 0
+_ATTR_FLOAT_RE = r"[-+]?\d+(?:\.\d+)?"
 
-    for section in root.iter("section"):
+
+def _fmt_num(x: float) -> str:
+    """
+    Format floats in a stable, compact way without exponent.
+    Prefer integers when the value is very close to an int.
+    """
+    if abs(x - round(x)) < 1e-9:
+        return str(int(round(x)))
+    s = f"{x:.6f}".rstrip("0").rstrip(".")
+    return s if s else "0"
+
+
+def _find_container_opening_by_id(
+    content: str, container_id: str, start_pos: int = 0
+) -> Optional[tuple[int, int]]:
+    """
+    Return (tag_start, tag_end) for the opening '<container ...>' tag whose id= matches.
+    tag_end is an exclusive index (one past '>').
+    """
+    needle = f'id="{container_id}"'
+    pos = content.find(needle, start_pos)
+    if pos < 0:
+        return None
+
+    tag_start = content.rfind("<container", 0, pos)
+    if tag_start < 0:
+        return None
+
+    tag_end = content.find(">", tag_start)
+    if tag_end < 0:
+        return None
+
+    opening = content[tag_start : tag_end + 1]
+    if needle not in opening:
+        return _find_container_opening_by_id(content, container_id, start_pos=pos + len(needle))
+
+    return (tag_start, tag_end + 1)
+
+
+def _set_attr_in_opening_tag(opening: str, attr: str, value: str) -> str:
+    """
+    Update or insert attr="value" in a <container ...> opening tag.
+    Only touches that single attribute; preserves the rest verbatim.
+    """
+    pat = re.compile(rf'(\s{re.escape(attr)}="){_ATTR_FLOAT_RE}(")')
+    if pat.search(opening):
+        return pat.sub(rf"\g<1>{value}\2", opening, count=1)
+
+    if opening.endswith("/>"):
+        return opening[:-2] + f' {attr}="{value}"' + "/>"
+    if opening.endswith(">"):
+        return opening[:-1] + f' {attr}="{value}"' + ">"
+    return opening
+
+
+def patch_container_attrs_by_id(
+    content: str,
+    container_id: str,
+    *,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
+) -> str:
+    loc = _find_container_opening_by_id(content, container_id)
+    if not loc:
+        return content
+
+    tag_start, tag_end = loc
+    opening = content[tag_start:tag_end]
+
+    if x is not None:
+        opening = _set_attr_in_opening_tag(opening, "x", _fmt_num(x))
+    if y is not None:
+        opening = _set_attr_in_opening_tag(opening, "y", _fmt_num(y))
+    if width is not None:
+        opening = _set_attr_in_opening_tag(opening, "width", _fmt_num(width))
+    if height is not None:
+        opening = _set_attr_in_opening_tag(opening, "height", _fmt_num(height))
+
+    return content[:tag_start] + opening + content[tag_end:]
+
+
+def _container_dim_map(root) -> dict[str, tuple[Optional[float], Optional[float], Optional[float], Optional[float]]]:
+    """
+    Build map: container_id -> (x, y, width, height) as floats when present.
+    """
+    m: dict[str, tuple[Optional[float], Optional[float], Optional[float], Optional[float]]] = {}
+    for c in root.iter("container"):
+        cid = c.get("id")
+        if not cid:
+            continue
+        def _f(name: str) -> Optional[float]:
+            v = c.get(name)
+            if v is None or v == "":
+                return None
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        m[cid] = (_f("x"), _f("y"), _f("width"), _f("height"))
+    return m
+
+
+def _apply_resize_layout(content: str) -> tuple[str, int]:
+    """
+    Apply resize logic while preserving the original XML formatting/CDATA by patching
+    only container x/y/width/height attributes in the original text.
+    """
+    root_before = ET.fromstring(content)
+    before = _container_dim_map(root_before)
+
+    root_after = ET.fromstring(content)
+    page_width = float(root_after.get("width", "693") or 693.0)
+    pages_processed = 0
+    for section in root_after.iter("section"):
         for page in section.findall("page"):
             _resize_process_page(page, page_width)
             pages_processed += 1
 
-    return ET.tostring(root, encoding="unicode"), pages_processed
+    after = _container_dim_map(root_after)
+
+    # Patch only changed numeric attributes; everything else stays byte-identical.
+    patched = content
+    for cid, (bx, by, bw, bh) in before.items():
+        ax, ay, aw, ah = after.get(cid, (None, None, None, None))
+        changes = {}
+
+        def _changed(a: Optional[float], b: Optional[float]) -> bool:
+            if a is None and b is None:
+                return False
+            if a is None or b is None:
+                return True
+            return abs(a - b) > 1e-9
+
+        if _changed(ax, bx) and ax is not None:
+            changes["x"] = ax
+        if _changed(ay, by) and ay is not None:
+            changes["y"] = ay
+        if _changed(aw, bw) and aw is not None:
+            changes["width"] = aw
+        if _changed(ah, bh) and ah is not None:
+            changes["height"] = ah
+
+        if changes:
+            patched = patch_container_attrs_by_id(patched, cid, **changes)
+
+    return patched, pages_processed
 
 
 SPAN = '<span class="font-montserrat" style="font-size:12px;color:#000000;">'
