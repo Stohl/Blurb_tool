@@ -1,8 +1,8 @@
 # Blurb_tool
 
-I wanted my photo books to include dates, locations, and captions — the kind of thing I miss when I look through old family albums. The problem is that adding all that manually in BookWright takes forever, and burning text into the image itself doesn't work once you start cropping or resizing.
+I wanted my photo books to include dates, locations, and captions — the kind of thing I miss when I look through old family albums. The problem is that adding all that manually in BookWright takes forever. I already have all that information in Apple Photos.
 
-So I wrote a couple of Python scripts to solve this for myself. Maybe they're useful to you too.
+So I had AI write a couple of Python scripts to solve this for myself. Maybe they're useful to you too. I'm a photographer and a father, not a developer.
 
 ---
 
@@ -10,18 +10,18 @@ So I wrote a couple of Python scripts to solve this for myself. Maybe they're us
 
 **`blurb_captions.py`** reads your `.blurb` file directly, pulls EXIF data (EXIF ImageDescription, **not** IPTC or XMP) from the photos inside it, looks up the place name and weather via API, and writes captions into the text boxes on each page. It **does not change the file you pass in**. Instead it copies it to a new file next to it: if your book is `album.blurb`, the result is **`album-new.blurb`**. Open that one in BookWright.
 
-A caption ends up looking like this:
+A caption ends up looking something like this:
 
 ```
-Stockholm · tue 15 Jul 2025 · 14:30 · 22°C ☀︎ · 3 months
-Family at the beach
+Stockholm · tue 15 Jul 2025 · 14:30 · 22°C ☀︎ · 8 months
+First visit at the beach, 
 ```
 
 You can turn each part on or off (place, weather, age), choose **Swedish or English** for the date and age line (`CAPTION_LANG`), and choose short or full weekday/month words (`ABBREVIATE_TEXT`).
 
 **`csv_to_map.py`** takes the sidecar CSV the first script creates and builds a single-page HTML map showing where each photo was taken, with book page numbers as markers. Nice for remembering where everything was shot.
 
-The map works out of the box without any API key, using free [OpenFreeMap](https://openfreemap.org/) styles (Liberty, Bright, Positron). If you have a [MapTiler](https://cloud.maptiler.com/) key you can pass it in to unlock additional styles like satellite, outdoor, and your own custom maps.
+The map works out of the box without any API key, using free [OpenFreeMap](https://openfreemap.org/) styles (Liberty, Bright, Positron). If you have a [MapTiler](https://cloud.maptiler.com/) key you can pass it in to unlock asnd make custom maps.
 
 ---
 
@@ -30,7 +30,6 @@ The map works out of the box without any API key, using free [OpenFreeMap](https
 - Python 3.9 or later
 - BookWright 3.4.0 (what I tested with)
 - A Standard Landscape book with 4 photos and 4 text boxes per page
-- A [MapTiler](https://cloud.maptiler.com/) API key is **optional** — only needed for MapTiler styles
 
 ---
 
@@ -128,7 +127,7 @@ After the first run, a CSV file appears next to your book (same base name as the
 
 ## Known issues
 
-- **Photo frame fill/fit** — after opening `album-new.blurb`, you'll need to manually adjust each photo's fill or fit setting in BookWright. The script doesn't touch this.
+- **Photo frame fill/fit** — after opening `-new.blurb`, you'll need to manually adjust each photo's fill or fit setting in BookWright. The script doesn't touch this.
 - **Thumbnails don't update** — page thumbnails in BookWright won't refresh until you make a change on each page.
 
 ---
